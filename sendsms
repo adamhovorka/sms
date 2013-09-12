@@ -1,0 +1,49 @@
+#!/bin/bash
+
+#####====----
+#
+#  getsms - Send SMS messages via Google Voice
+#
+#####====----
+#
+#  Config:
+#
+#  The Google account that the messages will be retrieved from
+EMAIL="you@gmail.com"
+#
+#  The password for the above Google account
+PASSWORD="********"
+#
+#  The default number to search for
+#  NOTE: Other numbers *can* be specified at runtime.
+NUMBER="+13141592653"
+#
+#####====---
+
+
+# {{{
+
+# Die if there is no message
+if ! [ "$1" ]; then echo "You must supply a message."; exit 1; fi
+
+# If a different number was specified in the arguments, use it.
+[ $# -eq 2 ] && NUMBER=$2
+
+# Retrieve Google authentication salt
+AUTH=$(curl https://www.google.com/accounts/ClientLogin -s \
+--data-urlencode Email=$EMAIL --data-urlencode Passwd=$PASSWORD \
+-d accountType=GOOGLE -d service=grandcentral | grep "Auth" | tail -c +6)
+
+# Retrieve other salts (use unknown, retrieved just in case)
+SEND=$(curl -s --header "Authorization: GoogleLogin auth=$AUTH" \
+"https://www.google.com/voice/m/sms")
+_RNR_SE=$(echo "$SEND" | grep "_rnr_se" | cut -d '"' -f 6)
+_ID=$(echo "$SEND" | grep 'name="id"' | cut -d '"' -f 6)
+_C=$(echo "$SEND" | grep 'name="c"' | cut -d '"' -f 6)
+
+# Send message
+curl -s --header "Authorization: GoogleLogin auth=$AUTH" \
+-d "number=$NUMBER&_rnr_se=$_RNR_SE&id=$_ID&c=$_C&smstext=$1" \
+"https://www.google.com/voice/m/sendsms" > /dev/null
+
+# }}}

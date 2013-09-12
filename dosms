@@ -1,0 +1,62 @@
+#!/bin/bash
+
+#####====----
+#
+#  dosms - Run commands based off of retrieved SMS messages
+#
+#####====----
+#
+#  Config:
+#
+#  Full path to `sendsms'
+#  Note: This can just be "sendsms" if it's in your path.
+SEND="sendsms"
+#
+#####====----
+
+# {{{ Load input and previous timestamp
+
+# Get messages from stdin
+INPUT=$(cat)
+
+# Get last executed timestamp
+FILE=$(head -n 1 ~/.dosms)
+if ! [ "$FILE" ]; then FILE="-"; fi
+
+# Take everything after the last executed timestamp
+if ! [ "$(echo $INPUT | grep "$FILE")" ]; then
+	PARSED=$(echo "$INPUT")
+else
+	PARSED=$(echo "$INPUT" | sed "0,/$FILE/d")
+fi
+
+# Exit if there isn't anything to parse
+if ! [ "$PARSED" ]; then exit; fi
+
+# }}}
+
+# {{{ Iterate over the messages
+echo "$PARSED" | while read line; do
+
+	# Save the timestamp of the message
+	echo "$line" | cut -f 1 > ~/.dosms
+
+	# Parse the line for the message
+	MSG=$(echo "$line" | cut -f 2- | sed 's/]$//;s/\[//')
+	CMD=$(echo "$MSG" | cut -d " " -f 1)
+
+	case "$CMD" in
+		# }}}
+
+		"ping" ) # Sample ping command
+		$SEND 'Pong!'
+		;;
+
+		"at" ) # Simple timed alert command
+		TIME=$(echo "$MSG" | cut -d " " -f 2)
+		MESSAGE=$(echo "$MSG" | cut -d " " -f 3-)
+		echo "$SEND \"$MESSAGE\"" | at "$TIME" > /dev/null 2>&1
+		$SEND "Okay. Message set for $TIME."
+		;;
+	esac
+done

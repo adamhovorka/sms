@@ -1,0 +1,51 @@
+#!/bin/bash
+
+#####====----
+#
+#  getsms - Retrieve SMS messages from Google Voice
+#
+#####====----
+#
+#  Config:
+#
+#  The Google account that the messages will be retrieved from
+EMAIL="you@gmail.com"
+#
+#  The password for the above Google account
+PASSWORD="********"
+#
+#  The default number to search for
+#  NOTE: Other numbers *can* be specified at runtime.
+NUMBER="+13141592653"
+#
+#####====---
+
+
+# {{{
+
+# If a different number was specified in the arguments, use it.
+[ "$1" ] && NUMBER="$1"
+
+# Retrieve Google authentication salt
+AUTH=$(curl https://www.google.com/accounts/ClientLogin -s \
+--data-urlencode Email=$EMAIL --data-urlencode Passwd=$PASSWORD \
+-d accountType=GOOGLE -d service=grandcentral | grep "Auth" | tail -c +6)
+
+# Retrieve the first conversation with the specified number on the main page
+EXTRACTED=$(curl -s --header "Authorization: GoogleLogin auth=$AUTH" \
+"https://www.google.com/voice/m" | sed -une "/$NUMBER<\/a>/,/)<\/span>/p;
+/$NUMBER:/,/<\/div>/p" | sed "s/^<a.*/---/g" | sed -n "1,/---/p" | sed "/---/d")
+
+# Parse for message content and handle some HTML escapes
+MESSAGE=$(echo "$EXTRACTED" | sed -n '/span class=""/,/<\/span>/p' |
+sed '/span class="ms"/d;s/^[^>]*>/[/;s/<\/span>/]/' |
+sed "s/&quot;/\"/g;s/&#39;/'/g;s/&amp;/\&/g")
+
+# Parse for minimal timestamp
+# (Theoretically this provides enough to tell whether or not it was already processed)
+TIMESTAMP=$(echo "$EXTRACTED" | sed -n "/M)/p" | sed 's/[^>]*> (//;s/).*//')
+
+# Combine timestamps and messages
+paste <(printf '%s' "$TIMESTAMP") <(printf '%s' "$MESSAGE")
+
+# }}}
